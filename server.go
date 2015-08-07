@@ -8,20 +8,19 @@ import (
 
     "github.com/go-martini/martini"
     "github.com/kuwagata/martini-keystone-auth"
-    // "github.com/user/gorse-cache-redis"
-    // "github.com/user/gorse-storage-kafka"
-    // "github.com/user/gorse-storage-redis"
+    "github.com/powellchristoph/rsekafka"
 )
 
 func main() {
     m := martini.Classic()
 
     auth_handler := setupAuthHandler()
-
     m.Handlers(
         auth_handler,
         martini.Recovery(),
     )
+
+    storage := rsekafka.NewClient([]string{"192.168.59.103:9092"})
 
     m.Get("/**", func(request *http.Request, params martini.Params, response http.ResponseWriter) string {
         topic := params["_1"]
@@ -33,12 +32,25 @@ func main() {
         // } else {
         //     storage.Get(topic)
         // }
+        storage_events, _ := storage.Get(topic, 0)
+        events := make([]map[string]string, 0)
+        for _, event := range storage_events {
+            // var valid_json interface{}
+            // err = json.Unmarshal(string(event), &valid_json)
+            // if err != nil {
+            //     panic("Invalid JSON")
+            // }
+
+            eventMap := make(map[string]string)
+            eventMap["data"] = string(event.Value)
+            events = append(events, eventMap)
+        }
 
         // Example return
-        events := make([]map[string]string, 0)
-        event := make(map[string]string)
-        event["property"] = "value"
-        events = append(events, event)
+        // events := make([]map[string]string, 0)
+        // event := make(map[string]string)
+        // event["property"] = "value"
+        // events = append(events, event)
         jsonString, _ := json.Marshal(events)
         fmt.Println("Events: " + string(jsonString))
 
@@ -69,7 +81,7 @@ func main() {
         fmt.Println("Topic: " + topic)
         fmt.Println("Message: " + string(body))
         // Send message to storage
-        // storage.Insert(topic, string(body))
+        storage.Post(topic, string(body))
 
         response.WriteHeader(http.StatusCreated)
     })
